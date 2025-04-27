@@ -3,8 +3,9 @@ import uuid
 import requests
 import time
 import os
-import anthropic
+from openai import OpenAI
 from prompts import prompts
+import httpx
 
 # API参数
 TEXT_API_URL_SUBMIT = "http://120.241.200.233/submit_task"
@@ -12,10 +13,10 @@ TEXT_API_URL_RESULT = "http://120.241.200.233/get_result"
 TEXT_API_APPID = "10117"
 
 # 请在此处填写邮件中获取的队伍ID作为appsecret
-APPSECRET = "在此填写队伍ID"
+APPSECRET = "028faef5e5602a047fd4230863002c08"
 
-# 请在此处填写您的Anthropic API密钥
-ANTHROPIC_API_KEY = "在此填写您的Anthropic API密钥"
+# 请在此处填写您的DeepSeek API密钥
+DEEPSEEK_API_KEY = "sk-5365b696440a4efbadc3e04c12002435"
 
 def submit_text_detection(text):
     """提交文本检测任务"""
@@ -31,10 +32,12 @@ def submit_text_detection(text):
         response = requests.post(TEXT_API_URL_SUBMIT, json=params)
         result = response.json()
         
-        if result.get("status") == "success":
+        # 修改判断逻辑，接受'submitted'状态
+        if result.get("status") in ["success", "submitted"]:
             print(f"提交成功，UUID: {request_uuid}")
             print(f"剩余配额: {result.get('quota_remaining')}")
-            return request_uuid
+            # 返回API响应中的UUID，如果不存在则使用本地生成的UUID
+            return result.get("uuid", request_uuid)
         else:
             print(f"提交失败: {result}")
             return None
@@ -52,7 +55,11 @@ def get_detection_result(request_uuid):
     
     for _ in range(10):  # 最多尝试10次
         try:
-            response = requests.post(TEXT_API_URL_RESULT, json=params)
+            # 使用GET请求而不是POST
+            response = requests.get(
+                TEXT_API_URL_RESULT, 
+                params=params  # 使用params参数而不是json参数
+            )
             result = response.json()
             
             if result.get("status") == "completed":
@@ -78,7 +85,7 @@ def save_prompt_result(prompt, response, model, user_id, filename):
         "messages": [
             {
                 "role": "system",
-                "content": "你是一个专业的学术论文写作助手，帮助用户创作高质量的学术内容。"
+                "content": "你是一个专业的学术论文写作助手，帮助用户创作高质量的学术内容，请你模仿人类写作。"
             },
             {
                 "role": "user",
@@ -98,33 +105,38 @@ def save_prompt_result(prompt, response, model, user_id, filename):
     
     print(f"已保存到文件: {filename}")
 
-def generate_with_claude(prompt):
-    """使用Claude API生成内容"""
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+def generate_with_deepseek(prompt):
+    """使用DeepSeek API生成内容"""
+    client = OpenAI(
+        api_key=DEEPSEEK_API_KEY, 
+        base_url="https://api.deepseek.com",
+        http_client=httpx.Client()
+    )
     
     try:
-        message = client.messages.create(
-            model="claude-3-7-sonnet-20240307",
-            max_tokens=4000,
-            system="你是一个专业的学术论文写作助手，帮助用户创作高质量的学术内容。",
+        response = client.chat.completions.create(
+            model="deepseek-reasoner",  # 使用DeepSeek-V3模型
             messages=[
+                {"role": "system", "content": "你是一个专业的学术论文写作助手，帮助用户创作高质量的学术内容。"},
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            max_tokens=4000,
+            stream=False
         )
-        return message.content[0].text
+        return response.choices[0].message.content
     except Exception as e:
         print(f"生成内容出错: {e}")
         return None
 
-def test_prompt(prompt_index, model_name="claude-3-7-sonnet-20240307", user_id="your_team_id"):
+def test_prompt(prompt_index, model_name="deepseek-reasoner", user_id="your_team_id"):
     """测试特定提示词，并将结果保存到文件"""
     prompt = prompts[prompt_index]
     print(f"\n测试提示词 #{prompt_index + 1}")
     print("="*50)
     
-    # 使用Claude生成内容
+    # 使用DeepSeek生成内容
     print("正在生成内容...")
-    response = generate_with_claude(prompt)
+    response = generate_with_deepseek(prompt)
     
     if not response:
         print("生成内容失败")
@@ -142,15 +154,21 @@ def test_prompt(prompt_index, model_name="claude-3-7-sonnet-20240307", user_id="
     request_uuid = submit_text_detection(response)
     if request_uuid:
         confidence = get_detection_result(request_uuid)
-        result = "绕过成功" if confidence < 0.5 else "绕过失败"
-        print(f"检测结果 - AI置信度: {confidence}")
-        print(f"检测结果 - {result}")
         
-        # 记录测试结果
-        with open("test_results.txt", "a", encoding="utf-8") as f:
-            f.write(f"提示词 #{prompt_index + 1} - 置信度: {confidence} - {result}\n")
-        
-        return confidence
+        # 添加None值检查
+        if confidence is not None:
+            result = "绕过成功" if confidence < 0.5 else "绕过失败"
+            print(f"检测结果 - AI置信度: {confidence}")
+            print(f"检测结果 - {result}")
+            
+            # 记录测试结果
+            with open("test_results.txt", "a", encoding="utf-8") as f:
+                f.write(f"提示词 #{prompt_index + 1} - 置信度: {confidence} - {result}\n")
+            
+            return confidence
+        else:
+            print("未能获取有效的检测结果")
+            return None
     return None
 
 def test_all_prompts(start_index=0, end_index=None):
