@@ -115,7 +115,7 @@ def generate_with_deepseek(prompt):
     
     try:
         response = client.chat.completions.create(
-            model="deepseek-reasoner",  # 使用DeepSeek-V3模型
+            model="deepseek-chat",  # 使用DeepSeek-V3模型
             messages=[
                 {"role": "system", "content": "你是一个专业的学术论文写作助手，帮助用户创作高质量的学术内容。"},
                 {"role": "user", "content": prompt}
@@ -128,7 +128,7 @@ def generate_with_deepseek(prompt):
         print(f"生成内容出错: {e}")
         return None
 
-def test_prompt(prompt_index, model_name="deepseek-reasoner", user_id="your_team_id"):
+def test_prompt(prompt_index, model_name="deepseek-chat", user_id="your_team_id"):
     """测试特定提示词，并将结果保存到文件"""
     prompt = prompts[prompt_index]
     print(f"\n测试提示词 #{prompt_index + 1}")
