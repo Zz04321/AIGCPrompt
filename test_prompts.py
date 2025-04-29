@@ -16,7 +16,7 @@ TEXT_API_APPID = "10117"
 APPSECRET = "028faef5e5602a047fd4230863002c08"
 
 # 请在此处填写您的DeepSeek API密钥
-DEEPSEEK_API_KEY = "sk-5365b696440a4efbadc3e04c12002435"
+DEEPSEEK_API_KEY = ""
 
 def submit_text_detection(text):
     """提交文本检测任务"""
