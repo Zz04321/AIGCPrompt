@@ -105,7 +105,7 @@ def save_prompt_result(prompt, response, model, user_id, filename):
     
     print(f"已保存到文件: {filename}")
 
-def generate_with_deepseek(prompt):
+def generate_with_deepseek(prompt, temperature=0.7):
     """使用DeepSeek API生成内容"""
     client = OpenAI(
         api_key=DEEPSEEK_API_KEY, 
@@ -121,6 +121,7 @@ def generate_with_deepseek(prompt):
                 {"role": "user", "content": prompt}
             ],
             max_tokens=4000,
+            temperature=temperature,
             stream=False
         )
         return response.choices[0].message.content
@@ -128,7 +129,7 @@ def generate_with_deepseek(prompt):
         print(f"生成内容出错: {e}")
         return None
 
-def test_prompt(prompt_index, model_name="deepseek-chat", user_id="your_team_id"):
+def test_prompt(prompt_index, model_name="deepseek-chat", user_id="your_team_id", temperature=0.7):
     """测试特定提示词，并将结果保存到文件"""
     prompt = prompts[prompt_index]
     print(f"\n测试提示词 #{prompt_index + 1}")
@@ -136,7 +137,8 @@ def test_prompt(prompt_index, model_name="deepseek-chat", user_id="your_team_id"
     
     # 使用DeepSeek生成内容
     print("正在生成内容...")
-    response = generate_with_deepseek(prompt)
+    print(f"使用温度参数: {temperature}")
+    response = generate_with_deepseek(prompt, temperature)
     
     if not response:
         print("生成内容失败")
@@ -163,7 +165,7 @@ def test_prompt(prompt_index, model_name="deepseek-chat", user_id="your_team_id"
             
             # 记录测试结果
             with open("test_results.txt", "a", encoding="utf-8") as f:
-                f.write(f"提示词 #{prompt_index + 1} - 置信度: {confidence} - {result}\n")
+                f.write(f"提示词 #{prompt_index + 1} - 温度: {temperature} - 置信度: {confidence} - {result}\n")
             
             return confidence
         else:
@@ -171,7 +173,7 @@ def test_prompt(prompt_index, model_name="deepseek-chat", user_id="your_team_id"
             return None
     return None
 
-def test_all_prompts(start_index=0, end_index=None):
+def test_all_prompts(start_index=0, end_index=None, temperature=0.7):
     """测试所有提示词"""
     if end_index is None:
         end_index = len(prompts)
@@ -179,8 +181,13 @@ def test_all_prompts(start_index=0, end_index=None):
     results = []
     
     for i in range(start_index, end_index):
-        result = test_prompt(i)
-        results.append({"index": i, "confidence": result, "success": result < 0.5 if result is not None else False})
+        result = test_prompt(i, temperature=temperature)
+        results.append({
+            "index": i, 
+            "temperature": temperature,
+            "confidence": result, 
+            "success": result < 0.5 if result is not None else False
+        })
         time.sleep(5)  # 避免API请求过于频繁
     
     # 打印总结
@@ -188,6 +195,7 @@ def test_all_prompts(start_index=0, end_index=None):
     print("\n测试总结")
     print("="*50)
     print(f"测试提示词数量: {len(results)}")
+    print(f"使用温度参数: {temperature}")
     print(f"成功绕过数量: {success_count}")
     print(f"成功率: {success_count/len(results)*100:.2f}%")
     
@@ -195,6 +203,7 @@ def test_all_prompts(start_index=0, end_index=None):
     with open("test_summary.json", "w", encoding="utf-8") as f:
         json.dump({
             "total": len(results),
+            "temperature": temperature,
             "success": success_count,
             "success_rate": success_count/len(results),
             "results": results
@@ -209,10 +218,10 @@ if __name__ == "__main__":
         f.write("="*50 + "\n")
     
     # 可以选择测试单个提示词或者多个提示词
-    # test_prompt(0)  # 测试第一个提示词
+    # test_prompt(0, temperature=0.9)  # 测试第一个提示词，使用高温度值
     
     # 测试所有提示词
-    test_all_prompts()
+    test_all_prompts(temperature=0.8)  # 使用0.8的温度值
     
     # 也可以指定范围测试部分提示词
-    # test_all_prompts(0, 5)  # 测试前5个提示词 
+    # test_all_prompts(0, 5, temperature=1.0)  # 测试前5个提示词，使用最高温度值 
